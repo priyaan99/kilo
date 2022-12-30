@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,12 +8,19 @@
 
 struct termios original_termios;
 
+void die(const char *s) {
+    perror(s);
+    exit(1);
+} 
+
 void disable_raw_mode() {
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_termios);
+    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_termios) == -1) {
+        die("tcsetattr");
+    }
 }
 
 void enable_raw_mode() {
-    tcgetattr(STDIN_FILENO, &original_termios);
+    if (tcgetattr(STDIN_FILENO, &original_termios) == -1) die("tcgetattr");
     atexit(disable_raw_mode);
 
     struct termios raw = original_termios;
@@ -27,17 +35,15 @@ void enable_raw_mode() {
     /// It is in tenths of a second, so we set it to 1/10 of a second, or 100 milliseconds.
     raw.c_cc[VTIME] = 1;
 
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) die("tcsetattr");
 }
 
 int main() {
     enable_raw_mode();
 
-    char c;
-
     while (true) {
         char c = '\0';
-        read(STDIN_FILENO, &c, 1);
+        if (read(STDIN_FILENO, &c, 1) == -1 && errno != EAGAIN) die("read");
         if (iscntrl(c)) {
             printf("%d\r\n", c);
         } else {
